@@ -28,33 +28,26 @@ app.get('/metrics', async (req, res) => {
   res.end(await client.register.metrics());
 });
 
-
-app.use(bodyParser.urlencoded({
-  extended: true
-}));
+app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
 app.get('/', function (req, res) {
-  // Increase the number of requests
   httpRequestsTotal.inc();
-  
-  // Simulate execution time
+
   const start = Date.now();
   const simulateTime = Math.floor(Math.random() * (10000 - 500 + 1) + 500);
-  
+
   setTimeout(() => {
-    const duration = (Date.now() - start) / 1000; // Convert to seconds
+    const duration = (Date.now() - start) / 1000;
     httpRequestDurationSeconds.observe(duration);
   }, simulateTime);
-  
-  // Send the response
+
   res.sendFile(path.join(__dirname, "index.html"));
 });
 
-
 app.get('/profile-picture', function (req, res) {
   let img = fs.readFileSync(path.join(__dirname, "images/profile-1.jpg"));
-  res.writeHead(200, {'Content-Type': 'image/jpg' });
+  res.writeHead(200, { 'Content-Type': 'image/jpg' });
   res.end(img, 'binary');
 });
 
@@ -66,26 +59,15 @@ app.get('/readiness', function (req, res) {
   res.status(200).send('Ready');
 });
 
-// use when starting application locally with node command
-let mongoUrlLocal = "mongodb://admin:password@0.0.0.0:27017";
-
-// use when starting application as a separate docker container
-let mongoUrlDocker = "mongodb://admin:password@host.docker.internal:27017";
-
-// use when starting application as docker container, part of docker-compose
-let mongoUrlDockerCompose = "mongodb://admin:password@mongodb";
-
-// pass these options to mongo client connect request to avoid DeprecationWarning for current Server Discovery and Monitoring engine
-let mongoClientOptions = { useNewUrlParser: true, useUnifiedTopology: true };
-
-// "user-account" in demo with docker. "my-db" in demo with docker-compose
-let databaseName = "my-db";
+// MongoDB connection configuration using environment variables
+const mongoUrl = process.env.MONGO_URL || "mongodb://admin:password@localhost:27017";
+const mongoClientOptions = { useNewUrlParser: true, useUnifiedTopology: true };
+const databaseName = process.env.MONGO_DB_NAME || "my-db";
 
 app.post('/update-profile', function (req, res) {
   let userObj = req.body;
 
-//  MongoClient.connect(mongoUrlLocal, mongoClientOptions, function (err, client) {
-MongoClient.connect(mongoUrlDockerCompose, mongoClientOptions, function (err, client) {
+  MongoClient.connect(mongoUrl, mongoClientOptions, function (err, client) {
     if (err) throw err;
 
     let db = client.db(databaseName);
@@ -94,32 +76,26 @@ MongoClient.connect(mongoUrlDockerCompose, mongoClientOptions, function (err, cl
     let myquery = { userid: 1 };
     let newvalues = { $set: userObj };
 
-    db.collection("users").updateOne(myquery, newvalues, {upsert: true}, function(err, res) {
+    db.collection("users").updateOne(myquery, newvalues, { upsert: true }, function (err, result) {
       if (err) throw err;
       client.close();
     });
-
   });
-  // Send response
   res.send(userObj);
 });
 
 app.get('/get-profile', function (req, res) {
   let response = {};
-  // Connect to the db
-  MongoClient.connect(mongoUrlDockerCompose, mongoClientOptions, function (err, client) {
+  MongoClient.connect(mongoUrl, mongoClientOptions, function (err, client) {
     if (err) throw err;
 
     let db = client.db(databaseName);
-
     let myquery = { userid: 1 };
 
     db.collection("users").findOne(myquery, function (err, result) {
       if (err) throw err;
       response = result;
       client.close();
-
-      // Send response
       res.send(response ? response : {});
     });
   });
